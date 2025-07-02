@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pgvector
+playwright
+beautifulsoup4
+google-generativeai
+sentence-transformers
+python-dotenv
+pydantic
+httpx
+lxml
+numpy

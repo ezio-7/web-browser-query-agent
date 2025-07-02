@@ -1,0 +1,1029 @@
+# Concatenated Python Files from app/
+# Generated on: 2025-07-02 14:44:58.595643
+# ============================================================
+
+app\__init__.py
+
+<<CODE>>
+
+
+================================================================================
+
+app\agents\__init__.py
+
+<<CODE>>
+from .query_validator_agent import query_validator_agent
+from .similarity_agent import similarity_agent
+from .web_scraper_agent import web_scraper_agent
+from .summarizer_agent import summarizer_agent
+
+__all__ = [
+    "query_validator_agent",
+    "similarity_agent", 
+    "web_scraper_agent",
+    "summarizer_agent"
+]
+
+================================================================================
+
+app\agents\query_validator_agent.py
+
+<<CODE>>
+from app.services import gemini_service
+from typing import Tuple
+
+class QueryValidatorAgent:
+    def __init__(self):
+        self.gemini = gemini_service
+    
+    async def validate_query(self, query: str) -> Tuple[bool, str]:
+        prompt = f"""
+        You are a query validation agent. Analyze the following query and determine if it's a valid web search query.
+        
+        Invalid queries include:
+        - Personal commands (e.g., "walk my pet", "call someone")
+        - Multiple unrelated tasks in one query
+        - Non-searchable personal actions
+        - Gibberish or meaningless text
+        
+        Valid queries include:
+        - Information seeking questions
+        - Topic searches
+        - How-to queries
+        - Facts and data requests
+        
+        Query: "{query}"
+        
+        Respond with ONLY "VALID" or "INVALID" followed by a brief reason.
+        Format: VALID|reason or INVALID|reason
+        """
+        
+        try:
+            response = await self.gemini.generate_content(prompt)
+            if response:
+                parts = response.strip().split('|', 1)
+                is_valid = parts[0].strip().upper() == "VALID"
+                reason = parts[1].strip() if len(parts) > 1 else ""
+                return is_valid, reason
+            return False, "Unable to validate query"
+        except Exception as e:
+            print(f"Validation error: {e}")
+            return False, "Validation service error"
+
+query_validator_agent = QueryValidatorAgent()
+
+================================================================================
+
+app\agents\similarity_agent.py
+
+<<CODE>>
+from app.services import gemini_service, embedding_service
+from app.database.crud import QueryCRUD, QueryGroupCRUD
+from app.models import Query  # Add this import
+from app.config import settings
+from sqlalchemy.orm import Session
+from typing import Optional, List, Tuple
+import uuid
+import json
+
+class SimilarityAgent:
+    def __init__(self):
+        self.gemini = gemini_service
+        self.embedding_service = embedding_service
+        self.threshold = settings.SIMILARITY_THRESHOLD
+    
+    async def find_similar_query(self, db: Session, query: str) -> Optional[uuid.UUID]:
+        # First, get all existing queries
+        all_queries = db.query(Query).all()  # Fixed: Use Query directly
+        
+        if not all_queries:
+            return None
+        
+        # Use Gemini to find similar queries
+        similar_query_id = await self._check_similarity_with_ai(query, all_queries)
+        
+        if similar_query_id:
+            return similar_query_id
+        
+        # Fallback to embedding-based similarity as a secondary check
+        embedding = self.embedding_service.generate_embedding(query)
+        similar_queries = QueryCRUD.get_similar_queries(db, embedding, self.threshold)
+        
+        if similar_queries:
+            # Double-check with AI for the most similar one
+            confirmed_similar = await self._confirm_similarity_with_ai(query, similar_queries[0].original_query)
+            if confirmed_similar:
+                return similar_queries[0].id
+        
+        return None
+    
+    async def _check_similarity_with_ai(self, new_query: str, existing_queries: List) -> Optional[uuid.UUID]:
+        """Use Gemini to check if the new query is similar to any existing queries"""
+        
+        # Prepare a batch of queries to check
+        query_batch = []
+        for eq in existing_queries[:20]:  # Limit to recent 20 queries for API efficiency
+            query_batch.append({
+                "id": str(eq.id),
+                "query": eq.original_query
+            })
+        
+        prompt = f"""
+        You are a similarity detection agent. Your task is to determine if a new search query is semantically similar to any existing queries.
+        
+        New Query: "{new_query}"
+        
+        Existing Queries:
+        {json.dumps(query_batch, indent=2)}
+        
+        Queries are considered similar if they:
+        1. Ask for the same information in different words
+        2. Have the same search intent
+        3. Would return similar or identical search results
+        
+        Examples of similar queries:
+        - "Best places to visit in Delhi" and "Top tourist attractions in Delhi"
+        - "How to learn Python" and "Python learning resources"
+        - "Weather in New York" and "New York weather forecast"
+        
+        If you find a similar query, respond with: SIMILAR|<query_id>
+        If no similar query exists, respond with: NONE
+        
+        Important: Only mark queries as similar if they have the same search intent and would return similar results.
+        """
+        
+        try:
+            response = await self.gemini.generate_content(prompt)
+            if response:
+                result = response.strip()
+                if result.startswith("SIMILAR|"):
+                    query_id_str = result.split("|", 1)[1].strip()
+                    return uuid.UUID(query_id_str)
+        except Exception as e:
+            print(f"AI similarity check error: {e}")
+        
+        return None
+    
+    async def _confirm_similarity_with_ai(self, query1: str, query2: str) -> bool:
+        """Confirm if two queries are similar using AI"""
+        
+        prompt = f"""
+        Are these two search queries asking for similar information? Answer YES or NO.
+        
+        Query 1: "{query1}"
+        Query 2: "{query2}"
+        
+        Consider them similar if they:
+        - Have the same search intent
+        - Would return similar search results
+        - Ask for the same information in different words
+        
+        Respond with only YES or NO.
+        """
+        
+        try:
+            response = await self.gemini.generate_content(prompt)
+            if response:
+                return response.strip().upper() == "YES"
+        except Exception as e:
+            print(f"AI confirmation error: {e}")
+        
+        return False
+    
+    def group_similar_queries(self, db: Session, new_query_id: uuid.UUID, similar_query_id: uuid.UUID):
+        # Check if similar query already has a group
+        existing_group = QueryGroupCRUD.get_group_by_query_id(db, similar_query_id)
+        
+        if existing_group:
+            # Add new query to existing group
+            QueryGroupCRUD.add_query_to_group(db, new_query_id, existing_group.id)
+        else:
+            # Create new group with both queries
+            new_group = QueryGroupCRUD.create_group(db, similar_query_id)
+            QueryGroupCRUD.add_query_to_group(db, similar_query_id, new_group.id)
+            QueryGroupCRUD.add_query_to_group(db, new_query_id, new_group.id)
+
+similarity_agent = SimilarityAgent()
+
+================================================================================
+
+app\agents\summarizer_agent.py
+
+<<CODE>>
+from app.services import gemini_service
+from typing import List, Dict
+
+class SummarizerAgent:
+    def __init__(self):
+        self.gemini = gemini_service
+    
+    async def summarize_results(self, query: str, results: List[Dict[str, str]]) -> str:
+        """Create a single comprehensive summary from all search results"""
+        
+        # Combine all content
+        combined_content = ""
+        for i, result in enumerate(results, 1):
+            combined_content += f"\nSource {i} ({result['title']}):\n{result['content'][:1500]}\n"
+        
+        prompt = f"""
+        You are a helpful search assistant. Based on the search results below, provide a comprehensive answer to the user's query.
+        
+        User Query: "{query}"
+        
+        Search Results:
+        {combined_content}
+        
+        Instructions:
+        1. Synthesize information from all sources into one coherent answer
+        2. Focus on directly answering the user's question
+        3. Include specific places, attractions, or information mentioned
+        4. Do NOT mention website names or sources
+        5. Write in a natural, conversational tone
+        6. Make it informative and actionable
+        7. If the query asks for "best places" or similar, provide a clear list
+        8. Keep the response concise but comprehensive (around 200-300 words)
+        
+        Provide the answer as if you're a knowledgeable local guide or expert on the topic.
+        """
+        
+        try:
+            summary = await self.gemini.generate_content(prompt)
+            if summary:
+                return summary.strip()
+            else:
+                # Fallback summary
+                return self._create_fallback_summary(query, results)
+        except Exception as e:
+            print(f"Summarization error: {e}")
+            return self._create_fallback_summary(query, results)
+    
+    def _create_fallback_summary(self, query: str, results: List[Dict[str, str]]) -> str:
+        """Create a basic summary if AI fails"""
+        if not results:
+            return "No relevant information found for your query."
+        
+        # Extract key information from titles and content
+        summary = f"Based on the search for '{query}', here's what was found: "
+        
+        key_points = []
+        for result in results[:3]:
+            # Extract first meaningful sentence from content
+            if result['content']:
+                sentences = result['content'].split('.')
+                for sentence in sentences:
+                    if len(sentence.strip()) > 50:
+                        key_points.append(sentence.strip())
+                        break
+        
+        if key_points:
+            summary += " ".join(key_points[:2])
+        else:
+            summary += "Multiple relevant sources were found, but specific details couldn't be extracted."
+        
+        return summary
+
+summarizer_agent = SummarizerAgent()
+
+================================================================================
+
+app\agents\web_scraper_agent.py
+
+<<CODE>>
+import httpx
+from bs4 import BeautifulSoup
+from typing import List, Dict
+import asyncio
+from urllib.parse import quote_plus, urlparse
+import re
+
+class WebScraperAgent:
+    def __init__(self):
+        self.search_engines = {
+            'duckduckgo': 'https://html.duckduckgo.com/html/?q=',
+            'google': 'https://www.google.com/search?q='
+        }
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+    
+    async def search_and_scrape(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
+        # First, get search results
+        urls = await self._get_search_results(query, max_results)
+        
+        # Then scrape each URL
+        results = []
+        async with httpx.AsyncClient(timeout=30.0, headers=self.headers, follow_redirects=True) as client:
+            for url in urls:
+                try:
+                    # Skip ad/tracking URLs
+                    if 'duckduckgo.com/y.js' in url or 'bing.com/aclick' in url:
+                        continue
+                        
+                    content = await self._scrape_page(client, url)
+                    if content and content.get('content'):
+                        results.append(content)
+                except Exception as e:
+                    print(f"Error scraping {url}: {e}")
+                    continue
+        
+        return results
+    
+    async def _get_search_results(self, query: str, max_results: int) -> List[str]:
+        """Get search result URLs from DuckDuckGo"""
+        urls = []
+        search_url = self.search_engines['duckduckgo'] + quote_plus(query)
+        
+        async with httpx.AsyncClient(timeout=30.0, headers=self.headers) as client:
+            try:
+                response = await client.get(search_url)
+                response.raise_for_status()
+                
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Find all result links
+                for link in soup.find_all('a', class_='result__a'):
+                    href = link.get('href')
+                    if href and href.startswith('http') and 'duckduckgo.com' not in href:
+                        urls.append(href)
+                        if len(urls) >= max_results:
+                            break
+                
+                # Also look for result URLs in the snippets
+                for result in soup.find_all('div', class_='result'):
+                    link = result.find('a', class_='result__url')
+                    if link:
+                        url_text = link.get_text(strip=True)
+                        if url_text.startswith('http'):
+                            urls.append(url_text)
+                        elif not url_text.startswith('/'):
+                            urls.append(f"https://{url_text}")
+                        
+                        if len(urls) >= max_results:
+                            break
+                
+                # Remove duplicates while preserving order
+                seen = set()
+                unique_urls = []
+                for url in urls:
+                    if url not in seen:
+                        seen.add(url)
+                        unique_urls.append(url)
+                
+                urls = unique_urls[:max_results]
+                
+                # If still no results, use fallback URLs for common queries
+                if not urls and "delhi" in query.lower():
+                    urls = [
+                        "https://www.incredibleindia.org/content/incredible-india-v2/en/destinations/delhi.html",
+                        "https://www.lonelyplanet.com/india/delhi",
+                        "https://www.timeout.com/delhi/things-to-do/best-things-to-do-in-delhi",
+                        "https://en.wikipedia.org/wiki/Tourism_in_Delhi",
+                        "https://www.thrillophilia.com/places-to-visit-in-delhi"
+                    ][:max_results]
+                
+            except Exception as e:
+                print(f"Search error: {e}")
+        
+        return urls
+    
+    async def _scrape_page(self, client: httpx.AsyncClient, url: str) -> Dict[str, str]:
+        """Scrape content from a single page"""
+        content = {
+            'url': url,
+            'title': '',
+            'content': ''
+        }
+        
+        try:
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Get title
+            title_tag = soup.find('title')
+            if title_tag:
+                content['title'] = title_tag.get_text(strip=True)
+            
+            # Remove script and style elements
+            for script in soup(['script', 'style', 'meta', 'link', 'noscript']):
+                script.decompose()
+            
+            # Get main content - try different containers
+            main_content = None
+            for selector in ['main', 'article', '[role="main"]', '#content', '.content', 'body']:
+                main_content = soup.find(selector)
+                if main_content:
+                    break
+            
+            if not main_content:
+                main_content = soup.find('body')
+            
+            if main_content:
+                # Get text content
+                text = main_content.get_text(separator=' ', strip=True)
+                
+                # Clean up text
+                text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with single space
+                text = re.sub(r'\n+', ' ', text)  # Replace multiple newlines with space
+                
+                # Remove very short lines (likely navigation elements)
+                lines = text.split('.')
+                meaningful_lines = [line.strip() for line in lines if len(line.strip()) > 30]
+                text = '. '.join(meaningful_lines)
+                
+                # Limit content length
+                content['content'] = text[:5000]
+            
+        except httpx.HTTPStatusError as e:
+            print(f"HTTP error for {url}: {e}")
+        except Exception as e:
+            print(f"Error scraping {url}: {e}")
+        
+        return content
+
+web_scraper_agent = WebScraperAgent()
+
+================================================================================
+
+app\api\__init__.py
+
+<<CODE>>
+from .routes import router
+
+__all__ = ["router"]
+
+================================================================================
+
+app\api\routes.py
+
+<<CODE>>
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import List, Optional
+import uuid
+
+from app.database import get_db
+from app.database.crud import QueryCRUD, SearchResultCRUD
+from app.models import Query
+from app.agents import (
+    query_validator_agent,
+    similarity_agent,
+    web_scraper_agent,
+    summarizer_agent
+)
+from app.services import embedding_service
+from app.utils import normalize_query
+
+router = APIRouter(prefix="/api", tags=["search"])
+
+class SearchRequest(BaseModel):
+    query: str
+
+class SearchResponse(BaseModel):
+    status: str
+    message: Optional[str] = None
+    from_cache: bool = False
+    summary: Optional[str] = None
+    sources: List[dict] = []
+
+@router.post("/search", response_model=SearchResponse)
+async def search(request: SearchRequest, db: Session = Depends(get_db)):
+    """Main search endpoint"""
+    
+    # Step 1: Validate query
+    is_valid, reason = await query_validator_agent.validate_query(request.query)
+    
+    if not is_valid:
+        return SearchResponse(
+            status="invalid",
+            message=f"This is not a valid query. {reason}",
+            sources=[]
+        )
+    
+    # Step 2: Normalize query
+    normalized = normalize_query(request.query)
+    
+    # Step 3: Check for similar queries using AI agent
+    similar_query_id = await similarity_agent.find_similar_query(db, request.query)
+    
+    if similar_query_id:
+        # Get cached results
+        cached_results = SearchResultCRUD.get_results_by_query_id(db, similar_query_id)
+        if cached_results and cached_results[0].summary:  # Assuming we store the summary
+            return SearchResponse(
+                status="success",
+                from_cache=True,
+                summary=cached_results[0].summary,
+                sources=[{
+                    "title": r.title,
+                    "url": r.url
+                } for r in cached_results]
+            )
+    
+    # Step 4: Generate embedding for the new query
+    embedding = embedding_service.generate_embedding(normalized)
+    
+    # Step 5: Create new query
+    new_query = QueryCRUD.create_query(db, request.query, normalized, embedding)
+    
+    # Step 6: Perform web search and scraping
+    scraped_results = await web_scraper_agent.search_and_scrape(request.query)
+    
+    if not scraped_results:
+        return SearchResponse(
+            status="success",
+            message="No results found for your query.",
+            summary="I couldn't find any relevant information for your query. Please try rephrasing or being more specific.",
+            sources=[]
+        )
+    
+    # Step 7: Generate a single comprehensive summary
+    summary = await summarizer_agent.summarize_results(request.query, scraped_results)
+    
+    # Step 8: Save results to database with the summary
+    saved_results = []
+    for result in scraped_results:
+        saved_results.append({
+            'url': result['url'],
+            'title': result['title'],
+            'content': result['content'],
+            'summary': summary  # Store the main summary with the first result
+        })
+    
+    SearchResultCRUD.create_results(db, new_query.id, saved_results)
+    
+    # Step 9: Group with similar queries if found
+    if similar_query_id:
+        similarity_agent.group_similar_queries(db, new_query.id, similar_query_id)
+    
+    return SearchResponse(
+        status="success",
+        from_cache=False,
+        summary=summary,
+        sources=[{
+            "title": r['title'],
+            "url": r['url']
+        } for r in scraped_results]
+    )
+
+@router.get("/search/history")
+async def get_search_history(db: Session = Depends(get_db)):
+    """Get search history"""
+    queries = db.query(Query).order_by(Query.created_at.desc()).limit(50).all()
+    
+    return {
+        "queries": [{
+            "id": str(q.id),
+            "query": q.original_query,
+            "created_at": q.created_at.isoformat()
+        } for q in queries]
+    }
+
+@router.get("/search/{query_id}")
+async def get_query_details(query_id: str, db: Session = Depends(get_db)):
+    """Get details of a specific query"""
+    try:
+        query_uuid = uuid.UUID(query_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid query ID format")
+    
+    query = QueryCRUD.get_query_by_id(db, query_uuid)
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+    
+    results = SearchResultCRUD.get_results_by_query_id(db, query_uuid)
+    
+    # Get the summary from the first result (where we stored it)
+    summary = results[0].summary if results else None
+    
+    return {
+        "query": {
+            "id": str(query.id),
+            "original_query": query.original_query,
+            "normalized_query": query.normalized_query,
+            "created_at": query.created_at.isoformat()
+        },
+        "summary": summary,
+        "sources": [{
+            "title": r.title,
+            "url": r.url,
+            "scraped_at": r.scraped_at.isoformat()
+        } for r in results]
+    }
+
+================================================================================
+
+app\config.py
+
+<<CODE>>
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Settings:
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5433/query_agent_db")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.85"))
+    
+settings = Settings()
+
+================================================================================
+
+app\database\__init__.py
+
+<<CODE>>
+from .connection import get_db, init_db
+from .crud import QueryCRUD, SearchResultCRUD, QueryGroupCRUD
+
+__all__ = ["get_db", "init_db", "QueryCRUD", "SearchResultCRUD", "QueryGroupCRUD"]
+
+================================================================================
+
+app\database\connection.py
+
+<<CODE>>
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker, Session
+from app.config import settings
+from app.models import Base
+import time
+from sqlalchemy.exc import OperationalError
+
+# Create engine with connection pooling
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,  # Verify connections before using them
+    pool_size=5,
+    max_overflow=10
+)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def init_db():
+    # Wait for database to be ready
+    max_retries = 5
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            # Test connection
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))  # Fixed: Added text()
+            
+            # Create tables
+            Base.metadata.create_all(bind=engine)
+            print("Database initialized successfully!")
+            break
+            
+        except OperationalError as e:
+            retry_count += 1
+            print(f"Connection error: {e}")
+            if retry_count < max_retries:
+                print(f"Database connection failed. Retrying in 5 seconds... (Attempt {retry_count}/{max_retries})")
+                time.sleep(5)
+            else:
+                print("Failed to connect to database after maximum retries.")
+                raise e
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            raise e
+
+================================================================================
+
+app\database\crud.py
+
+<<CODE>>
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+from app.models import Query, SearchResult, QueryGroup, QueryGroupMapping
+from typing import List, Optional
+import uuid
+
+class QueryCRUD:
+    @staticmethod
+    def create_query(db: Session, original_query: str, normalized_query: str, embedding: List[float]) -> Query:
+        query = Query(
+            original_query=original_query,
+            normalized_query=normalized_query,
+            embedding=embedding
+        )
+        db.add(query)
+        db.commit()
+        db.refresh(query)
+        return query
+    
+    @staticmethod
+    def get_similar_queries(db: Session, embedding: List[float], threshold: float) -> List[Query]:
+        # Using pgvector's <=> operator for cosine distance
+        similar = db.query(Query).filter(
+            Query.embedding.cosine_distance(embedding) < (1 - threshold)
+        ).all()
+        return similar
+    
+    @staticmethod
+    def get_query_by_id(db: Session, query_id: uuid.UUID) -> Optional[Query]:
+        return db.query(Query).filter(Query.id == query_id).first()
+
+class SearchResultCRUD:
+    @staticmethod
+    def create_results(db: Session, query_id: uuid.UUID, results: List[dict]) -> List[SearchResult]:
+        search_results = []
+        for result in results:
+            sr = SearchResult(
+                query_id=query_id,
+                url=result['url'],
+                title=result['title'],
+                content=result['content'],
+                summary=result['summary']
+            )
+            db.add(sr)
+            search_results.append(sr)
+        
+        db.commit()
+        return search_results
+    
+    @staticmethod
+    def get_results_by_query_id(db: Session, query_id: uuid.UUID) -> List[SearchResult]:
+        return db.query(SearchResult).filter(SearchResult.query_id == query_id).all()
+
+class QueryGroupCRUD:
+    @staticmethod
+    def create_group(db: Session, representative_query_id: uuid.UUID) -> QueryGroup:
+        group = QueryGroup(representative_query_id=representative_query_id)
+        db.add(group)
+        db.commit()
+        db.refresh(group)
+        return group
+    
+    @staticmethod
+    def add_query_to_group(db: Session, query_id: uuid.UUID, group_id: uuid.UUID):
+        mapping = QueryGroupMapping(query_id=query_id, group_id=group_id)
+        db.add(mapping)
+        db.commit()
+    
+    @staticmethod
+    def get_group_by_query_id(db: Session, query_id: uuid.UUID) -> Optional[QueryGroup]:
+        mapping = db.query(QueryGroupMapping).filter(
+            QueryGroupMapping.query_id == query_id
+        ).first()
+        
+        if mapping:
+            return db.query(QueryGroup).filter(
+                QueryGroup.id == mapping.group_id
+            ).first()
+        return None
+
+================================================================================
+
+app\main.py
+
+<<CODE>>
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.api import router
+from app.database import init_db
+
+app = FastAPI(
+    title="Web Browser Query Agent",
+    description="AI-powered web search agent with query validation and caching",
+    version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include API routes
+app.include_router(router)
+
+@app.on_event("startup")
+async def startup_event():
+    # Initialize database
+    init_db()
+    # Removed Playwright initialization - will be handled when needed
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Web Browser Query Agent API",
+        "docs": "/docs",
+        "health": "ok"
+    }
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+================================================================================
+
+app\models\__init__.py
+
+<<CODE>>
+from .query import Query, QueryGroup, QueryGroupMapping, Base
+from .result import SearchResult
+
+__all__ = ["Query", "QueryGroup", "QueryGroupMapping", "SearchResult", "Base"]
+
+================================================================================
+
+app\models\query.py
+
+<<CODE>>
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
+import uuid
+from datetime import datetime
+
+Base = declarative_base()
+
+class Query(Base):
+    __tablename__ = "queries"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    original_query = Column(Text, nullable=False)
+    normalized_query = Column(Text, nullable=False)
+    embedding = Column(Vector(384))  # 384 for all-MiniLM-L6-v2
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    results = relationship("SearchResult", back_populates="query")
+    group_mappings = relationship("QueryGroupMapping", back_populates="query")
+
+class QueryGroup(Base):
+    __tablename__ = "query_groups"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    representative_query_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    mappings = relationship("QueryGroupMapping", back_populates="group")
+
+class QueryGroupMapping(Base):
+    __tablename__ = "query_group_mappings"
+    
+    query_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"), primary_key=True)
+    group_id = Column(UUID(as_uuid=True), ForeignKey("query_groups.id"), primary_key=True)
+    
+    query = relationship("Query", back_populates="group_mappings")
+    group = relationship("QueryGroup", back_populates="mappings")
+
+================================================================================
+
+app\models\result.py
+
+<<CODE>>
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+import uuid
+from datetime import datetime
+from .query import Base
+
+class SearchResult(Base):
+    __tablename__ = "search_results"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    query_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"))
+    url = Column(Text, nullable=False)
+    title = Column(Text)
+    content = Column(Text)
+    summary = Column(Text)
+    scraped_at = Column(DateTime, default=datetime.utcnow)
+    
+    query = relationship("Query", back_populates="results")
+
+================================================================================
+
+app\services\__init__.py
+
+<<CODE>>
+from .gemini_service import gemini_service
+from .embedding_service import embedding_service
+
+__all__ = ["gemini_service", "embedding_service"]
+
+================================================================================
+
+app\services\embedding_service.py
+
+<<CODE>>
+from sentence_transformers import SentenceTransformer
+from app.config import settings
+from typing import List
+import numpy as np
+
+class EmbeddingService:
+    def __init__(self):
+        self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
+    
+    def generate_embedding(self, text: str) -> List[float]:
+        embedding = self.model.encode(text)
+        return embedding.tolist()
+    
+    def calculate_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
+        # Cosine similarity
+        a = np.array(embedding1)
+        b = np.array(embedding2)
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+embedding_service = EmbeddingService()
+
+================================================================================
+
+app\services\gemini_service.py
+
+<<CODE>>
+import google.generativeai as genai
+from app.config import settings
+from typing import Optional
+
+class GeminiService:
+    def __init__(self):
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        # Updated model name
+        self.model = genai.GenerativeModel('gemini-1.5-flash')  # or 'gemini-1.5-pro'
+    
+    async def generate_content(self, prompt: str) -> Optional[str]:
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            print(f"Error generating content: {e}")
+            # Let's also list available models
+            try:
+                models = genai.list_models()
+                print("Available models:")
+                for model in models:
+                    if 'generateContent' in model.supported_generation_methods:
+                        print(f"  - {model.name}")
+            except:
+                pass
+            return None
+
+gemini_service = GeminiService()
+
+================================================================================
+
+app\utils\__init__.py
+
+<<CODE>>
+from .helpers import normalize_query, format_response
+
+__all__ = ["normalize_query", "format_response"]
+
+================================================================================
+
+app\utils\helpers.py
+
+<<CODE>>
+import re
+from typing import List, Dict
+
+def normalize_query(query: str) -> str:
+    """Normalize query for consistency"""
+    # Convert to lowercase
+    normalized = query.lower()
+    
+    # Remove extra whitespace
+    normalized = ' '.join(normalized.split())
+    
+    # Remove special characters except spaces
+    normalized = re.sub(r'[^\w\s]', '', normalized)
+    
+    return normalized.strip()
+
+def format_response(results: list, from_cache: bool = False) -> dict:
+    """Format the API response - DEPRECATED, kept for compatibility"""
+    return {
+        "status": "success",
+        "from_cache": from_cache,
+        "result_count": len(results),
+        "results": [
+            {
+                "title": r.title,
+                "url": r.url,
+                "summary": r.summary
+            } for r in results
+        ]
+    }
+
+================================================================================
+

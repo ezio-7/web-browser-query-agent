@@ -1,0 +1,166 @@
+{
+  "info": {
+    "name": "Web Browser Query Agent API",
+    "description": "Collection for testing the Web Browser Query Agent API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Search Query - Delhi Tourism",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"query\": \"Best places to visit in Delhi\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/search",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "search"]
+        }
+      }
+    },
+    {
+      "name": "Invalid Query Test",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"query\": \"walk my pet, add apples to grocery\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/search",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "search"]
+        }
+      }
+    },
+    {
+      "name": "Similar Query Test 1",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"query\": \"I am in Delhi, what are the best places to visit\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/search",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "search"]
+        }
+      }
+    },
+    {
+      "name": "Similar Query Test 2",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"query\": \"Top tourist attractions in Delhi\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/search",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "search"]
+        }
+      }
+    },
+    {
+      "name": "Search Query - Python",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"query\": \"How to learn Python programming\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/search",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "search"]
+        }
+      }
+    },
+    {
+      "name": "Get Search History",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/search/history",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "search", "history"]
+        }
+      }
+    },
+    {
+      "name": "Get Query Details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/search/{query_id}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "search", "{query_id}"]
+        }
+      }
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["health"]
+        }
+      }
+    }
+  ]
+}
