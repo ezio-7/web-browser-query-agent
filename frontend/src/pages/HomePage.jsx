@@ -26,7 +26,6 @@ export default function HomePage() {
     await search(query);
     setShowResults(true);
     
-    // Refresh recent searches after a successful search
     if (!error) {
       setTimeout(() => {
         window.location.reload();
@@ -69,7 +68,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Feature hints */}
       <div className="mt-16 text-center text-sm text-gray-500 dark:text-gray-400">
         <p>Press <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">Ctrl+K</kbd> for keyboard shortcuts</p>
       </div>

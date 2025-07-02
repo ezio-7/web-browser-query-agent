@@ -1,6 +1,6 @@
 from app.services import gemini_service, embedding_service
 from app.database.crud import QueryCRUD, QueryGroupCRUD
-from app.models import Query  # Add this import
+from app.models import Query 
 from app.config import settings
 from sqlalchemy.orm import Session
 from typing import Optional, List, Tuple
@@ -14,24 +14,20 @@ class SimilarityAgent:
         self.threshold = settings.SIMILARITY_THRESHOLD
     
     async def find_similar_query(self, db: Session, query: str) -> Optional[uuid.UUID]:
-        # First, get all existing queries
-        all_queries = db.query(Query).all()  # Fixed: Use Query directly
+        all_queries = db.query(Query).all()
         
         if not all_queries:
             return None
         
-        # Use Gemini to find similar queries
         similar_query_id = await self._check_similarity_with_ai(query, all_queries)
         
         if similar_query_id:
             return similar_query_id
         
-        # Fallback to embedding-based similarity as a secondary check
         embedding = self.embedding_service.generate_embedding(query)
         similar_queries = QueryCRUD.get_similar_queries(db, embedding, self.threshold)
         
         if similar_queries:
-            # Double-check with AI for the most similar one
             confirmed_similar = await self._confirm_similarity_with_ai(query, similar_queries[0].original_query)
             if confirmed_similar:
                 return similar_queries[0].id
@@ -39,11 +35,9 @@ class SimilarityAgent:
         return None
     
     async def _check_similarity_with_ai(self, new_query: str, existing_queries: List) -> Optional[uuid.UUID]:
-        """Use Gemini to check if the new query is similar to any existing queries"""
         
-        # Prepare a batch of queries to check
         query_batch = []
-        for eq in existing_queries[:20]:  # Limit to recent 20 queries for API efficiency
+        for eq in existing_queries[:20]:
             query_batch.append({
                 "id": str(eq.id),
                 "query": eq.original_query
@@ -86,7 +80,6 @@ class SimilarityAgent:
         return None
     
     async def _confirm_similarity_with_ai(self, query1: str, query2: str) -> bool:
-        """Confirm if two queries are similar using AI"""
         
         prompt = f"""
         Are these two search queries asking for similar information? Answer YES or NO.
@@ -112,14 +105,11 @@ class SimilarityAgent:
         return False
     
     def group_similar_queries(self, db: Session, new_query_id: uuid.UUID, similar_query_id: uuid.UUID):
-        # Check if similar query already has a group
         existing_group = QueryGroupCRUD.get_group_by_query_id(db, similar_query_id)
         
         if existing_group:
-            # Add new query to existing group
             QueryGroupCRUD.add_query_to_group(db, new_query_id, existing_group.id)
         else:
-            # Create new group with both queries
             new_group = QueryGroupCRUD.create_group(db, similar_query_id)
             QueryGroupCRUD.add_query_to_group(db, similar_query_id, new_group.id)
             QueryGroupCRUD.add_query_to_group(db, new_query_id, new_group.id)

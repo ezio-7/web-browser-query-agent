@@ -146,7 +146,6 @@ export default function SearchBar({ onSearch, isLoading, initialValue = '' }) {
         </div>
       </form>
 
-      {/* Suggestions Dropdown */}
       {showSuggestions && suggestions.length > 0 && (
         <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
           {suggestions.map((suggestion, index) => (

@@ -27,7 +27,6 @@ export const searchApi = {
   },
 
   getSuggestions: async (query) => {
-    // This would ideally be a separate endpoint, but we'll use history for now
     const response = await api.get('/search/history');
     const queries = response.data.queries || [];
     return queries

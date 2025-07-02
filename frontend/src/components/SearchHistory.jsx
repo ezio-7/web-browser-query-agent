@@ -53,7 +53,6 @@ export default function SearchHistory() {
 
   const groupedQueries = groupQueriesByDate(filteredQueries);
   
-  // Pagination logic
   const totalPages = Math.ceil(filteredQueries.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -93,7 +92,6 @@ export default function SearchHistory() {
 
   return (
     <div className="space-y-6">
-      {/* Search and Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -158,7 +156,6 @@ export default function SearchHistory() {
         </div>
       </div>
 
-      {/* Results */}
       {paginatedGroups.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-500 dark:text-gray-400">
@@ -191,7 +188,6 @@ export default function SearchHistory() {
             ))}
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 sm:px-6 rounded-lg">
               <div className="flex flex-1 justify-between sm:hidden">

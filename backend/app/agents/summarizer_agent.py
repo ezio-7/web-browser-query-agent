@@ -6,9 +6,7 @@ class SummarizerAgent:
         self.gemini = gemini_service
     
     async def summarize_results(self, query: str, results: List[Dict[str, str]]) -> str:
-        """Create a single comprehensive summary from all search results"""
         
-        # Combine all content
         combined_content = ""
         for i, result in enumerate(results, 1):
             combined_content += f"\nSource {i} ({result['title']}):\n{result['content'][:1500]}\n"
@@ -39,23 +37,19 @@ class SummarizerAgent:
             if summary:
                 return summary.strip()
             else:
-                # Fallback summary
                 return self._create_fallback_summary(query, results)
         except Exception as e:
             print(f"Summarization error: {e}")
             return self._create_fallback_summary(query, results)
     
     def _create_fallback_summary(self, query: str, results: List[Dict[str, str]]) -> str:
-        """Create a basic summary if AI fails"""
         if not results:
             return "No relevant information found for your query."
         
-        # Extract key information from titles and content
         summary = f"Based on the search for '{query}', here's what was found: "
         
         key_points = []
         for result in results[:3]:
-            # Extract first meaningful sentence from content
             if result['content']:
                 sentences = result['content'].split('.')
                 for sentence in sentences:

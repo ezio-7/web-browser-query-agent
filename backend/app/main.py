@@ -9,7 +9,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,14 +17,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API routes
 app.include_router(router)
 
 @app.on_event("startup")
 async def startup_event():
-    # Initialize database
     init_db()
-    # Removed Playwright initialization - will be handled when needed
 
 @app.get("/")
 async def root():

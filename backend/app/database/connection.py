@@ -5,10 +5,9 @@ from app.models import Base
 import time
 from sqlalchemy.exc import OperationalError
 
-# Create engine with connection pooling
 engine = create_engine(
     settings.DATABASE_URL,
-    pool_pre_ping=True,  # Verify connections before using them
+    pool_pre_ping=True,
     pool_size=5,
     max_overflow=10
 )
@@ -23,17 +22,14 @@ def get_db():
         db.close()
 
 def init_db():
-    # Wait for database to be ready
     max_retries = 5
     retry_count = 0
     
     while retry_count < max_retries:
         try:
-            # Test connection
             with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))  # Fixed: Added text()
+                conn.execute(text("SELECT 1"))
             
-            # Create tables
             Base.metadata.create_all(bind=engine)
             print("Database initialized successfully!")
             break

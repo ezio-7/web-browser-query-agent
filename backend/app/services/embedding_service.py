@@ -12,7 +12,6 @@ class EmbeddingService:
         return embedding.tolist()
     
     def calculate_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
-        # Cosine similarity
         a = np.array(embedding1)
         b = np.array(embedding2)
         return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))

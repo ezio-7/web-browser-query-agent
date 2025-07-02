@@ -30,12 +30,10 @@ export default function Analytics() {
       const allQueries = data.queries || [];
       setQueries(allQueries);
       
-      // Calculate analytics
       const uniqueTexts = new Set(allQueries.map(q => q.query.toLowerCase()));
       const totalQueries = allQueries.length;
       const uniqueQueries = uniqueTexts.size;
       
-      // Calculate queries by day for the last 7 days
       const last7Days = Array.from({ length: 7 }, (_, i) => {
         const date = startOfDay(subDays(new Date(), i));
         return {
@@ -54,7 +52,6 @@ export default function Analytics() {
         }
       });
       
-      // Calculate top queries
       const queryCount = {};
       allQueries.forEach(query => {
         const text = query.query.toLowerCase();
@@ -66,7 +63,6 @@ export default function Analytics() {
         .slice(0, 5)
         .map(([query, count]) => ({ query, count }));
       
-      // Calculate hourly distribution
       const hourlyDist = Array.from({ length: 24 }, (_, i) => ({
         hour: i,
         count: 0
@@ -77,7 +73,6 @@ export default function Analytics() {
         hourlyDist[hour].count++;
       });
       
-      // Simple cache hit rate calculation (would need backend support for accurate data)
       const cacheHitRate = uniqueQueries > 0 ? ((totalQueries - uniqueQueries) / totalQueries * 100).toFixed(1) : 0;
       
       setAnalytics({
@@ -117,7 +112,6 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
@@ -160,9 +154,7 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Query Trends */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Query Trends (Last 7 Days)</h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -183,7 +175,6 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
 
-        {/* Top Queries */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Queries</h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -201,7 +192,6 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
 
-        {/* Hourly Distribution */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 lg:col-span-2">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Hourly Query Distribution</h3>
           <ResponsiveContainer width="100%" height={300}>

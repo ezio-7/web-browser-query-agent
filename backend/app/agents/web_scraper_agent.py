@@ -16,15 +16,12 @@ class WebScraperAgent:
         }
     
     async def search_and_scrape(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
-        # First, get search results
         urls = await self._get_search_results(query, max_results)
         
-        # Then scrape each URL
         results = []
         async with httpx.AsyncClient(timeout=30.0, headers=self.headers, follow_redirects=True) as client:
             for url in urls:
                 try:
-                    # Skip ad/tracking URLs
                     if 'duckduckgo.com/y.js' in url or 'bing.com/aclick' in url:
                         continue
                         
@@ -38,7 +35,6 @@ class WebScraperAgent:
         return results
     
     async def _get_search_results(self, query: str, max_results: int) -> List[str]:
-        """Get search result URLs from DuckDuckGo"""
         urls = []
         search_url = self.search_engines['duckduckgo'] + quote_plus(query)
         
@@ -49,7 +45,6 @@ class WebScraperAgent:
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Find all result links
                 for link in soup.find_all('a', class_='result__a'):
                     href = link.get('href')
                     if href and href.startswith('http') and 'duckduckgo.com' not in href:
@@ -57,7 +52,6 @@ class WebScraperAgent:
                         if len(urls) >= max_results:
                             break
                 
-                # Also look for result URLs in the snippets
                 for result in soup.find_all('div', class_='result'):
                     link = result.find('a', class_='result__url')
                     if link:
@@ -70,7 +64,6 @@ class WebScraperAgent:
                         if len(urls) >= max_results:
                             break
                 
-                # Remove duplicates while preserving order
                 seen = set()
                 unique_urls = []
                 for url in urls:
@@ -80,7 +73,6 @@ class WebScraperAgent:
                 
                 urls = unique_urls[:max_results]
                 
-                # If still no results, use fallback URLs for common queries
                 if not urls and "delhi" in query.lower():
                     urls = [
                         "https://www.incredibleindia.org/content/incredible-india-v2/en/destinations/delhi.html",
@@ -96,7 +88,6 @@ class WebScraperAgent:
         return urls
     
     async def _scrape_page(self, client: httpx.AsyncClient, url: str) -> Dict[str, str]:
-        """Scrape content from a single page"""
         content = {
             'url': url,
             'title': '',
@@ -109,16 +100,13 @@ class WebScraperAgent:
             
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Get title
             title_tag = soup.find('title')
             if title_tag:
                 content['title'] = title_tag.get_text(strip=True)
             
-            # Remove script and style elements
             for script in soup(['script', 'style', 'meta', 'link', 'noscript']):
                 script.decompose()
             
-            # Get main content - try different containers
             main_content = None
             for selector in ['main', 'article', '[role="main"]', '#content', '.content', 'body']:
                 main_content = soup.find(selector)
@@ -129,19 +117,15 @@ class WebScraperAgent:
                 main_content = soup.find('body')
             
             if main_content:
-                # Get text content
                 text = main_content.get_text(separator=' ', strip=True)
                 
-                # Clean up text
-                text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with single space
-                text = re.sub(r'\n+', ' ', text)  # Replace multiple newlines with space
+                text = re.sub(r'\s+', ' ', text)
+                text = re.sub(r'\n+', ' ', text) 
                 
-                # Remove very short lines (likely navigation elements)
                 lines = text.split('.')
                 meaningful_lines = [line.strip() for line in lines if len(line.strip()) > 30]
                 text = '. '.join(meaningful_lines)
                 
-                # Limit content length
                 content['content'] = text[:5000]
             
         except httpx.HTTPStatusError as e:

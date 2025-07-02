@@ -30,9 +30,7 @@ class SearchResponse(BaseModel):
 
 @router.post("/search", response_model=SearchResponse)
 async def search(request: SearchRequest, db: Session = Depends(get_db)):
-    """Main search endpoint"""
     
-    # Step 1: Validate query
     is_valid, reason = await query_validator_agent.validate_query(request.query)
     
     if not is_valid:
@@ -42,16 +40,13 @@ async def search(request: SearchRequest, db: Session = Depends(get_db)):
             sources=[]
         )
     
-    # Step 2: Normalize query
     normalized = normalize_query(request.query)
     
-    # Step 3: Check for similar queries using AI agent
     similar_query_id = await similarity_agent.find_similar_query(db, request.query)
     
     if similar_query_id:
-        # Get cached results
         cached_results = SearchResultCRUD.get_results_by_query_id(db, similar_query_id)
-        if cached_results and cached_results[0].summary:  # Assuming we store the summary
+        if cached_results and cached_results[0].summary:
             return SearchResponse(
                 status="success",
                 from_cache=True,
@@ -62,13 +57,10 @@ async def search(request: SearchRequest, db: Session = Depends(get_db)):
                 } for r in cached_results]
             )
     
-    # Step 4: Generate embedding for the new query
     embedding = embedding_service.generate_embedding(normalized)
     
-    # Step 5: Create new query
     new_query = QueryCRUD.create_query(db, request.query, normalized, embedding)
     
-    # Step 6: Perform web search and scraping
     scraped_results = await web_scraper_agent.search_and_scrape(request.query)
     
     if not scraped_results:
@@ -79,22 +71,19 @@ async def search(request: SearchRequest, db: Session = Depends(get_db)):
             sources=[]
         )
     
-    # Step 7: Generate a single comprehensive summary
     summary = await summarizer_agent.summarize_results(request.query, scraped_results)
     
-    # Step 8: Save results to database with the summary
     saved_results = []
     for result in scraped_results:
         saved_results.append({
             'url': result['url'],
             'title': result['title'],
             'content': result['content'],
-            'summary': summary  # Store the main summary with the first result
+            'summary': summary
         })
     
     SearchResultCRUD.create_results(db, new_query.id, saved_results)
     
-    # Step 9: Group with similar queries if found
     if similar_query_id:
         similarity_agent.group_similar_queries(db, new_query.id, similar_query_id)
     
@@ -110,7 +99,6 @@ async def search(request: SearchRequest, db: Session = Depends(get_db)):
 
 @router.get("/search/history")
 async def get_search_history(db: Session = Depends(get_db)):
-    """Get search history"""
     queries = db.query(Query).order_by(Query.created_at.desc()).limit(50).all()
     
     return {
@@ -123,7 +111,6 @@ async def get_search_history(db: Session = Depends(get_db)):
 
 @router.get("/search/{query_id}")
 async def get_query_details(query_id: str, db: Session = Depends(get_db)):
-    """Get details of a specific query"""
     try:
         query_uuid = uuid.UUID(query_id)
     except ValueError:
@@ -135,7 +122,6 @@ async def get_query_details(query_id: str, db: Session = Depends(get_db)):
     
     results = SearchResultCRUD.get_results_by_query_id(db, query_uuid)
     
-    # Get the summary from the first result (where we stored it)
     summary = results[0].summary if results else None
     
     return {

@@ -19,7 +19,6 @@ class QueryCRUD:
     
     @staticmethod
     def get_similar_queries(db: Session, embedding: List[float], threshold: float) -> List[Query]:
-        # Using pgvector's <=> operator for cosine distance
         similar = db.query(Query).filter(
             Query.embedding.cosine_distance(embedding) < (1 - threshold)
         ).all()

@@ -9,7 +9,7 @@ export const formatDate = (dateString) => {
     return formatDistanceToNow(date, { addSuffix: true });
   } else if (diffInHours < 48) {
     return 'Yesterday';
-  } else if (diffInHours < 168) { // 7 days
+  } else if (diffInHours < 168) {
     return format(date, 'EEEE');
   } else {
     return format(date, 'MMM d, yyyy');
