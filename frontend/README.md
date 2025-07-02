@@ -1,12 +1,44 @@
-# React + Vite
+# FRONTEND
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Installation
 
-Currently, two official plugins are available:
+### 1. Clone the Repository
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```BASH
+git clone <repository-url>
+cd query-agent-frontend
+```
 
-## Expanding the ESLint configuration
+### 2. Install Dependencies
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```BASH
+npm install
+```
+
+### 3. Start Development Server
+
+```BASH
+npm run dev
+```
+
+The application will be available at [http://localhost:3000](http://localhost:3000)
+
+## Usage Guide
+
+### Basic Search Flow
+
+- Type your query in the search bar
+- View suggestions as you type (appears after 3 characters)
+- Press Enter or click search to submit
+- View results with AI-generated summary and sources
+- Click sources to visit original websites
+
+### Keyboard Shortcuts
+
+| Shortcut    | Action |
+| -------- | ------- |
+| /  | Focus search bar    |
+| Ctrl + K | Show keyboard shortcuts     |
+| Escape    | Close modals/suggestions  |
+| ↑ ↓    | Navigate suggestions  |
+| Enter    | Select suggestion  |
