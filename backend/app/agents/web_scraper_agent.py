@@ -73,15 +73,6 @@ class WebScraperAgent:
                 
                 urls = unique_urls[:max_results]
                 
-                if not urls and "delhi" in query.lower():
-                    urls = [
-                        "https://www.incredibleindia.org/content/incredible-india-v2/en/destinations/delhi.html",
-                        "https://www.lonelyplanet.com/india/delhi",
-                        "https://www.timeout.com/delhi/things-to-do/best-things-to-do-in-delhi",
-                        "https://en.wikipedia.org/wiki/Tourism_in_Delhi",
-                        "https://www.thrillophilia.com/places-to-visit-in-delhi"
-                    ][:max_results]
-                
             except Exception as e:
                 print(f"Search error: {e}")
         
