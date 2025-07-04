@@ -191,3 +191,6 @@ config.local.py
 # Backup files
 *.bak
 *.backup
+
+all_code.txt
+concat_files.py
