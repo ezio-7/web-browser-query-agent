@@ -14,7 +14,7 @@ class Query(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     original_query = Column(Text, nullable=False)
     normalized_query = Column(Text, nullable=False)
-    embedding = Column(Vector(384))  # 384 for all-MiniLM-L6-v2
+    embedding = Column(Vector(384))
     created_at = Column(DateTime, default=datetime.utcnow)
     
     results = relationship("SearchResult", back_populates="query")

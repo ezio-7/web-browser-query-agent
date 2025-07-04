@@ -69,10 +69,12 @@ export default function Analytics() {
       }));
       
       allQueries.forEach(query => {
-        const hour = new Date(query.created_at).getHours();
+        const date = new Date(query.created_at);
+        const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+        const hour = istDate.getHours();
         hourlyDist[hour].count++;
       });
-      
+            
       const cacheHitRate = uniqueQueries > 0 ? ((totalQueries - uniqueQueries) / totalQueries * 100).toFixed(1) : 0;
       
       setAnalytics({
