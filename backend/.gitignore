@@ -183,7 +183,6 @@ docker-compose.override.yml
 *.h5
 *.model
 data/
-models/
 
 # Any local configuration files
 local_config.py
